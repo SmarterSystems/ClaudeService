@@ -8,6 +8,6 @@ builder.Services.AddSingleton<IClaudeCliRunner, ClaudeCliRunner>();
 var app = builder.Build();
 
 app.UseHttpsRedirection();
-app.UseAuthorization();
+app.UseMiddleware<ApiKeyMiddleware>();
 app.MapControllers();
 app.Run();

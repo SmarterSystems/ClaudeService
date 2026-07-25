@@ -42,12 +42,44 @@ the child process environment, because an API key present in the environment
 would silently take precedence over the subscription credential and bill per
 token.
 
+## Securing the service
+
+Every request needs an `X-API-Key` header matching `Auth:ApiKey`. A missing or
+wrong key is answered with HTTP 401, and the key is compared in constant time.
+
+```
+Auth__ApiKey=<a long random string>
+```
+
+The service **fails closed**. With no key configured it answers every request
+with HTTP 500 and says so, rather than serving an open endpoint. That is
+deliberate: this endpoint runs an agent with tool access on whatever host it is
+installed on, so an accidental deployment without a key must not be a working
+deployment.
+
+If the service is reachable only from localhost or an internal container network,
+the key adds nothing and can be turned off explicitly:
+
+```
+Auth__Disabled=true
+```
+
+Isolation is still the stronger control. Prefer binding to loopback
+(`ASPNETCORE_URLS=http://127.0.0.1:5220`), or in Docker leave the port unpublished
+and let n8n reach the service over the internal network. Use the API key when a
+network boundary has to be crossed, not as a replacement for keeping the endpoint
+off the public internet.
+
+In n8n, a Header Auth credential with name `X-API-Key` covers this.
+
 ## Configuration
 
 All keys are optional.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
+| `Auth:ApiKey` | none | Expected value of the `X-API-Key` header, required unless auth is disabled |
+| `Auth:Disabled` | `false` | Skips the key check, for isolated deployments |
 | `ClaudeCli:ExecutablePath` | `claude` | Path to the CLI, resolved via `PATH` when not set |
 | `ClaudeCli:WorkingDirectory` | `agent-workspace` next to the app | Directory the CLI runs in, also where uploads are stored |
 | `ClaudeCli:TimeoutSeconds` | `600` | Kills the process tree when a call takes longer |
