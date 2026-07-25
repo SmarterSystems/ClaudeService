@@ -1,0 +1,19 @@
+@SmarterSystems.Claude.Service_HostAddress = https://localhost:7189
+@sessionId = 69845fa8abc7499c8c9fd23c60de0fbd
+###
+POST {{SmarterSystems.Claude.Service_HostAddress}}/Agent/session
+Content-Type: application/json
+
+{
+  "SystemMessage": "You are Claude Code, Anthropic's official CLI for Claude."
+}
+
+###
+POST {{SmarterSystems.Claude.Service_HostAddress}}/Agent/message
+Content-Type: application/json
+
+{
+  "sessionId": "{{sessionId}}",
+  "message": "How is the temperature in Unterägeri, Switzerland?",
+  "model": "claude-opus-4-8"
+}
