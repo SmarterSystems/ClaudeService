@@ -192,3 +192,7 @@ wrong API key, 500 when no API key is configured.
 ## Known limitations
 
 - Uploaded files stay in the working directory. There is no cleanup job.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
