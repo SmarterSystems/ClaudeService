@@ -1,20 +1,20 @@
 # SmarterSystems Claude Service
 
-An HTTP wrapper around the Claude Code CLI. It lets n8n workflows (or any other
-HTTP client) talk to Claude through a Claude subscription instead of a
-pay-as-you-go API key, and it exposes the agent loop, so the model can use tools
-and keep conversations alive across calls.
+An HTTP wrapper around the Claude Code CLI, so n8n workflows or any other HTTP
+client can talk to Claude using a Claude subscription instead of a pay-as-you-go
+API key.
 
-## Why this exists
+## When to use it
 
-The Anthropic Messages API expects an API key. If you use one, n8n's built-in
-Anthropic node already does the job and this service is unnecessary.
+Use it if you want a Claude subscription to pay for the calls, or if you need the
+agent loop: tool use and conversations that continue across separate HTTP calls.
 
-This service targets the other case: authenticating with a Claude subscription.
-Anthropic permits that through Claude Code and the Agent SDK, which includes the
-non-interactive `claude -p` command this service calls. Subscription credentials
-used directly against the Messages API are rejected, so the CLI is the supported
-path.
+Do not use it if you have an Anthropic API key. n8n's built-in Anthropic node
+already covers that case and this service adds nothing.
+
+A subscription credential is not accepted by the Anthropic Messages API directly.
+Claude Code is the supported way to use one, which is why this service drives the
+CLI instead of calling the API.
 
 ## Requirements
 
@@ -22,175 +22,177 @@ path.
 - Claude Code CLI installed on the host and authenticated
 - A Claude Pro, Max, Team, or Enterprise plan
 
-## Authentication
+## Quick start
 
-The service never handles credentials itself. It shells out to the `claude`
-executable, which authenticates on its own. Two ways to set that up on the host:
+Authenticate the CLI once on the host by running `claude` and logging in.
 
-- Interactive: run `claude` once and log in.
-- Headless (servers, containers): run `claude setup-token` on a machine with a
-  browser, then set the printed token as an environment variable for the service
-  process:
+Start the service:
 
 ```bash
-CLAUDE_CODE_OAUTH_TOKEN=the-token-printed-by-setup-token
+dotnet run --project SmarterSystems.Claude.Service --urls http://localhost:5220
 ```
 
-Do not put credentials in `appsettings.json`. Nothing reads them from there. The
-runner deliberately removes `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` from
-the child process environment, because an API key present in the environment
-would silently take precedence over the subscription credential and bill per
-token.
-
-## Securing the service
-
-Every request needs an `X-API-Key` header whose value matches the configured
-`Auth:ApiKey`. A missing or wrong key is answered with HTTP 401, and the
-comparison runs in constant time.
-
-Set the key in `appsettings.json`:
+It refuses every request until an API key is configured. Put one in
+`appsettings.json`:
 
 ```json
 {
   "Auth": {
-    "ApiKey": "a long random string"
+    "ApiKey": "YOUR_API_KEY"
   }
 }
 ```
 
-Or as an environment variable, which is the better choice on a server:
+Replace `YOUR_API_KEY` with a long random string of your own, then call it:
 
 ```bash
-Auth__ApiKey=a-long-random-string
+curl -X POST http://localhost:5220/Agent/message -H "Content-Type: application/json" -H "X-API-Key: YOUR_API_KEY" -d '{"message":"Name the capital of Switzerland.","model":"claude-haiku-4-5-20251001"}'
 ```
 
-The service **fails closed**. With no key configured it answers every request
-with HTTP 500 and says so, rather than serving an open endpoint. That is
-deliberate: this endpoint runs an agent with tool access on whatever host it is
-installed on, so an accidental deployment without a key must not be a working
-deployment.
+```json
+{ "message": "Bern.", "stopReason": "end_turn", "hasError": false, "error": null }
+```
+
+## Authenticating Claude
+
+The service holds no Claude credentials. It runs the `claude` executable, which
+authenticates on its own, so the host it runs on has to be logged in.
+
+- **Interactive host:** run `claude` once and log in.
+- **Server or container:** run `claude setup-token` on a machine that has a
+  browser, then hand the printed token to the service process as the
+  `CLAUDE_CODE_OAUTH_TOKEN` environment variable.
+
+If an `ANTHROPIC_API_KEY` exists in the environment, the CLI would prefer it over
+the subscription and bill per token. The service therefore removes
+`ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` before starting the CLI. Setting
+either of them has no effect here.
+
+## Securing the service
+
+Every request needs an `X-API-Key` header matching `Auth:ApiKey`. A missing or
+wrong key returns HTTP 401, and the comparison runs in constant time.
+
+With no key configured, every request returns HTTP 500 with an explanation. That
+is deliberate. This endpoint runs an agent with tool access on its host, so a
+deployment where the key was forgotten must not be a working deployment.
 
 If the service is reachable only from localhost or an internal container network,
-the key adds nothing and can be turned off explicitly:
+set `Auth:Disabled` to `true` to skip the check.
 
-```bash
-Auth__Disabled=true
-```
-
-Isolation is still the stronger control. Prefer binding to loopback
-(`ASPNETCORE_URLS=http://127.0.0.1:5220`), or in Docker leave the port unpublished
-and let n8n reach the service over the internal network. Use the API key when a
-network boundary has to be crossed, not as a replacement for keeping the endpoint
+Isolation remains the stronger control. Bind to loopback with
+`ASPNETCORE_URLS=http://127.0.0.1:5220`, or in Docker leave the port unpublished
+and let n8n reach the service over the internal network. Use the key when a
+network boundary has to be crossed, not as a substitute for keeping the endpoint
 off the public internet.
 
-In n8n, a Header Auth credential with name `X-API-Key` covers this.
+In n8n, a Header Auth credential named `X-API-Key` covers this.
 
 ## Configuration
 
-Settings are written with a colon in `appsettings.json` and with a double
-underscore as an environment variable. `Auth:ApiKey` in the file is
-`Auth__ApiKey` in the environment, and the environment wins.
+Every setting lives in `appsettings.json` and can be overridden by an environment
+variable. A colon in the file becomes a double underscore in the environment, so
+`Auth:ApiKey` is `Auth__ApiKey`, and the environment wins.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `Auth:ApiKey` | none | Expected value of the `X-API-Key` header, required unless auth is disabled |
-| `Auth:Disabled` | `false` | Skips the key check, for isolated deployments |
-| `ClaudeCli:ExecutablePath` | `claude` | Path to the CLI, resolved via `PATH` when not set |
-| `ClaudeCli:WorkingDirectory` | `agent-workspace` next to the app | Directory the CLI runs in, also where uploads are stored |
+| `Auth:ApiKey` | none | Expected value of the `X-API-Key` header. Required unless `Auth:Disabled` is set |
+| `Auth:Disabled` | `false` | Skips the key check, for deployments that are already isolated |
+| `ClaudeCli:ExecutablePath` | `claude` | Path to the CLI, resolved through `PATH` when left empty |
+| `ClaudeCli:WorkingDirectory` | `agent-workspace` next to the app | Where the CLI runs and where uploads are stored |
 | `ClaudeCli:TimeoutSeconds` | `600` | Kills the process tree when a call takes longer |
 
-The working directory matters: Claude Code scopes session lookup to it, so it has
-to stay stable across restarts.
+Keep the working directory stable. Claude Code scopes session lookup to it, so
+changing it makes existing sessions unreachable.
 
 ## Endpoints
 
 ### `POST /Agent/message`
 
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `model` | yes | A model id your plan can use, for example `claude-haiku-4-5-20251001` |
+| `message` | yes, unless `fileId` is set | The prompt |
+| `sessionId` | no | A UUID. Continues that conversation, or starts it |
+| `fileId` | no | An id returned by `/Agent/file` |
+| `schema` | no | A JSON schema, as a string, that the answer must match |
+
 ```json
 {
-  "message": "Summarise this text: ...",
-  "model": "claude-haiku-4-5-20251001",
-  "sessionId": "00000000-0000-0000-0000-000000000000",
-  "fileId": "optional, from /Agent/file",
-  "schema": "optional JSON schema as a string"
+  "message": "Bern.",
+  "stopReason": "end_turn",
+  "hasError": false,
+  "error": null
 }
-```
-
-`model` is required, and so is at least one of `message` or `fileId`.
-
-```json
-{ "message": "...", "stopReason": "end_turn", "hasError": false, "error": null }
 ```
 
 ### `POST /Agent/file`
 
 ```json
-{ "file": "<base64>", "fileName": "numbers.txt", "mediaType": "optional" }
+{ "file": "SGFsbG8gV2VsdA==", "fileName": "numbers.txt", "mediaType": "text/plain" }
 ```
+
+`file` is the content as base64. `mediaType` is optional and is derived from the
+file name or the content when omitted.
 
 ```json
 { "fileId": "60ad5fbeee71475e8ac37274e4f6dc6d.txt", "hasError": false, "error": null }
 ```
 
-Pass the returned `fileId` to `/Agent/message`. The agent reads the file with the
-`Read` tool, which is the only tool enabled, and only when a file is referenced.
+Pass the returned `fileId` to `/Agent/message`. The agent then reads that file
+with the `Read` tool, which is the only tool enabled, and only for requests that
+reference a file.
 
 ## Sessions
 
-The service holds no conversation state. Claude Code stores sessions on disk, so
-they survive a restart of this service.
+The service keeps no conversation state. Claude Code stores sessions on disk, so
+they survive a restart of the service.
 
-- No `sessionId`: one-shot request.
-- Same `sessionId` again: continues that conversation.
-- New `sessionId`: starts a new one.
+- No `sessionId`: a one-shot request.
+- A `sessionId` seen before: continues that conversation.
+- A new `sessionId`: starts a new one.
 
-The caller owns the id and it has to be a UUID. Claude Code rejects anything else.
-n8n execution ids are numeric, so generate a UUID in the workflow and carry it
-through the steps, or store one per entity if a conversation should outlive a run.
+The caller owns the id and it has to be a UUID, anything else is rejected with
+HTTP 400. n8n execution ids are numbers, so generate a UUID in the workflow and
+carry it through the steps, or store one per customer or topic if a conversation
+should outlive a single run.
 
 ### Compacting a long session
 
-Sending `/compact` as the `message` of an existing session works and does what it
-does interactively: Claude Code summarises the conversation so far and continues
-from that summary. Verified by the `{"type":"system","subtype":"compact_boundary"}`
-entry it writes into the session transcript, and by a fact stated before the
-compaction still being answered correctly afterwards.
+Send `/compact` as the `message` of an existing session and Claude Code summarises
+the conversation so far, then continues from that summary. Useful for sessions
+that live for weeks, where every call would otherwise carry a growing history.
+One-shot requests never need it.
 
-Worth knowing before wiring it into a workflow:
+Three things to expect:
 
-- The reply comes back empty. `hasError: false` is the only success signal, there
-  is no report of what was saved.
-- The transcript on disk does not shrink. It is an append-only log and the summary
-  is added to it. The saving happens in the context sent to the model.
-- Compaction is itself a model call, so it is not free. On short conversations it
-  costs more than it saves.
-- It is undocumented for non-interactive mode. The CLI documentation lists
-  `/model`, `/effort`, `/fast`, `/color`, `/rename` and `/mcp` as usable with
-  `-p`, but not `/compact`. It works today and may stop working without that
-  counting as a breaking change.
-
-This matters for conversations that live for weeks, where every call would
-otherwise carry a growing history. One-shot requests without a session never need
-it.
+- The reply is empty. `hasError: false` is the only success signal.
+- Compaction is itself a model call, so on short conversations it costs more than
+  it saves.
+- It is not a documented feature of the CLI's non-interactive mode. It works, but
+  it may stop working in a future CLI release.
 
 ## Structured output
 
-With `schema`, the CLI is invoked with `--json-schema` and the answer comes back
-as JSON matching that schema. Without it, the answer is plain text. Asking for
-JSON in the prompt alone is unreliable, the model tends to wrap it in code fences,
-so use `schema` when a workflow has to parse the result.
+Send a JSON schema in `schema` and the answer comes back as JSON matching it.
+Without a schema the answer is plain text.
+
+Use `schema` whenever a workflow has to parse the result. Asking for JSON in the
+prompt alone is unreliable, answers often arrive wrapped in markdown code fences.
 
 ## Error handling
 
-Failures are returned as HTTP 200 with `hasError: true` and a message in `error`,
-so an n8n branch checks the field rather than the status code. Malformed input
-that model binding rejects, such as a `sessionId` that is not a UUID, still comes
-back as HTTP 400.
+Failures during a call return HTTP 200 with `hasError: true` and a message in
+`error`, so a workflow branches on the field rather than the status code.
+
+Requests that are rejected before reaching that stage use real status codes: 400
+for malformed input such as a `sessionId` that is not a UUID, 401 for a missing or
+wrong API key, 500 when no API key is configured.
 
 ## Known limitations
 
-- Uploaded files stay in the working directory, there is no cleanup job.
-- Claude Code session files grow over time and are never pruned.
-- Quota is bound to the account, not the machine. A workflow shares the plan's
-  usage windows with everyday Claude Code work, and there is no overage, so a
-  depleted window fails the request outright.
+- Uploaded files stay in the working directory. There is no cleanup job.
+- Claude Code session transcripts grow over time and are never pruned.
+- Quota belongs to the account, not the machine. Workflows share the plan's usage
+  windows with everyday Claude Code work on the same account, and there is no
+  overage, so a depleted window fails requests outright.
