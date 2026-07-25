@@ -32,8 +32,8 @@ executable, which authenticates on its own. Two ways to set that up on the host:
   browser, then set the printed token as an environment variable for the service
   process:
 
-```
-CLAUDE_CODE_OAUTH_TOKEN=<token>
+```bash
+CLAUDE_CODE_OAUTH_TOKEN=the-token-printed-by-setup-token
 ```
 
 Do not put credentials in `appsettings.json`. Nothing reads them from there. The
@@ -44,11 +44,24 @@ token.
 
 ## Securing the service
 
-Every request needs an `X-API-Key` header matching `Auth:ApiKey`. A missing or
-wrong key is answered with HTTP 401, and the key is compared in constant time.
+Every request needs an `X-API-Key` header whose value matches the configured
+`Auth:ApiKey`. A missing or wrong key is answered with HTTP 401, and the
+comparison runs in constant time.
 
+Set the key in `appsettings.json`:
+
+```json
+{
+  "Auth": {
+    "ApiKey": "a long random string"
+  }
+}
 ```
-Auth__ApiKey=<a long random string>
+
+Or as an environment variable, which is the better choice on a server:
+
+```bash
+Auth__ApiKey=a-long-random-string
 ```
 
 The service **fails closed**. With no key configured it answers every request
@@ -60,7 +73,7 @@ deployment.
 If the service is reachable only from localhost or an internal container network,
 the key adds nothing and can be turned off explicitly:
 
-```
+```bash
 Auth__Disabled=true
 ```
 
@@ -74,7 +87,9 @@ In n8n, a Header Auth credential with name `X-API-Key` covers this.
 
 ## Configuration
 
-All keys are optional.
+Settings are written with a colon in `appsettings.json` and with a double
+underscore as an environment variable. `Auth:ApiKey` in the file is
+`Auth__ApiKey` in the environment, and the environment wins.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
