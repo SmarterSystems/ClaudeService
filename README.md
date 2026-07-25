@@ -101,6 +101,31 @@ The caller owns the id and it has to be a UUID. Claude Code rejects anything els
 n8n execution ids are numeric, so generate a UUID in the workflow and carry it
 through the steps, or store one per entity if a conversation should outlive a run.
 
+### Compacting a long session
+
+Sending `/compact` as the `message` of an existing session works and does what it
+does interactively: Claude Code summarises the conversation so far and continues
+from that summary. Verified by the `{"type":"system","subtype":"compact_boundary"}`
+entry it writes into the session transcript, and by a fact stated before the
+compaction still being answered correctly afterwards.
+
+Worth knowing before wiring it into a workflow:
+
+- The reply comes back empty. `hasError: false` is the only success signal, there
+  is no report of what was saved.
+- The transcript on disk does not shrink. It is an append-only log and the summary
+  is added to it. The saving happens in the context sent to the model.
+- Compaction is itself a model call, so it is not free. On short conversations it
+  costs more than it saves.
+- It is undocumented for non-interactive mode. The CLI documentation lists
+  `/model`, `/effort`, `/fast`, `/color`, `/rename` and `/mcp` as usable with
+  `-p`, but not `/compact`. It works today and may stop working without that
+  counting as a breaking change.
+
+This matters for conversations that live for weeks, where every call would
+otherwise carry a growing history. One-shot requests without a session never need
+it.
+
 ## Structured output
 
 With `schema`, the CLI is invoked with `--json-schema` and the answer comes back
