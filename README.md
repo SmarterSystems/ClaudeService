@@ -192,7 +192,3 @@ wrong API key, 500 when no API key is configured.
 ## Known limitations
 
 - Uploaded files stay in the working directory. There is no cleanup job.
-- Claude Code session transcripts grow over time and are never pruned.
-- Quota belongs to the account, not the machine. Workflows share the plan's usage
-  windows with everyday Claude Code work on the same account, and there is no
-  overage, so a depleted window fails requests outright.
