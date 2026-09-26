@@ -4,3 +4,5 @@ obj/
 *.user
 agent-workspace/
 appsettings.Development.json
+/SmarterSystems.Claude.Service/appsettings.Production.json
+/SmarterSystems.Claude.Service/Properties/PublishProfiles/FolderProfile.pubxml

@@ -88,6 +88,31 @@ off the public internet.
 
 In n8n, a Header Auth credential named `X-API-Key` covers this.
 
+## Deployment
+
+The service terminates no TLS and holds no certificate. Put a reverse proxy in
+front of it, let the proxy own the public port and the certificate, and bind
+Kestrel to loopback.
+
+`appsettings.Production.json` does the second half: it binds
+`http://127.0.0.1:5220` through `Kestrel:Endpoints`, which overrides
+`ASPNETCORE_URLS` and `--urls`, so the service cannot be exposed on a public
+interface by an environment variable set somewhere else.
+
+Because the proxy forwards over plain HTTP, the app reads `X-Forwarded-For` and
+`X-Forwarded-Proto` from loopback callers, and there is no HTTPS redirect. A
+redirect would answer the proxy with the port Kestrel is bound to and break
+every call.
+
+A worked setup for nginx on port 445 with a Let's Encrypt certificate, next to
+an existing n8n on the same host, is in [deploy/README.md](deploy/README.md),
+together with the nginx site, the systemd unit, and the environment file.
+
+Two settings on the proxy are not optional. Its read timeout has to exceed
+`ClaudeCli:TimeoutSeconds`, otherwise a long call returns 504 while the CLI is
+still working, and its request size limit has to allow the base64 encoded body
+that `/Agent/file` sends.
+
 ## Configuration
 
 Every setting lives in `appsettings.json` and can be overridden by an environment
