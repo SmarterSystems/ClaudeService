@@ -18,7 +18,7 @@ CLI instead of calling the API.
 
 ## Requirements
 
-- .NET 10
+- .NET 11
 - Claude Code CLI installed on the host and authenticated
 - A Claude Pro, Max, Team, or Enterprise plan
 
