@@ -1,5 +1,8 @@
 # SmarterSystems Claude Service
 
+[![.NET](https://img.shields.io/badge/.NET-10%20%7C%2011-512BD4.svg)](https://dotnet.microsoft.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 An HTTP wrapper around the Claude Code CLI, so n8n workflows or any other HTTP
 client can talk to Claude using a Claude subscription instead of a pay-as-you-go
 API key.
@@ -18,7 +21,8 @@ CLI instead of calling the API.
 
 ## Requirements
 
-- .NET 11
+- .NET 11 SDK to build. The service targets `net10.0` and `net11.0` and runs on
+  either runtime
 - Claude Code CLI installed on the host and authenticated
 - A Claude Pro, Max, Team, or Enterprise plan
 
@@ -29,8 +33,11 @@ Authenticate the CLI once on the host by running `claude` and logging in.
 Start the service:
 
 ```bash
-dotnet run --project SmarterSystems.Claude.Service --urls http://localhost:5220
+dotnet run --project SmarterSystems.Claude.Service --framework net11.0 --urls http://localhost:5220
 ```
+
+Because the project targets two frameworks, `dotnet run` and `dotnet publish`
+need `--framework`. Use `net10.0` to run on .NET 10.
 
 It refuses every request until an API key is configured. Put one in
 `appsettings.json`:
